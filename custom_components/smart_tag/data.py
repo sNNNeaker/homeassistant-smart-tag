@@ -20,6 +20,11 @@ if TYPE_CHECKING:
 type SmartTagEntry = ConfigEntry[SmartTagData]
 
 
+def _clean(value: str | None) -> str | None:
+    """Strip the padding the API adds to text fields."""
+    return (value.strip() or None) if isinstance(value, str) else value
+
+
 @dataclass
 class SmartTagData:
     """Runtime data for the SMART tag integration."""
@@ -38,7 +43,7 @@ class Student:
         return cls(
             campus=value.get("campus"),
             external_id=value.get("externalId"),
-            full_name=value.get("fullName") or "Student",
+            full_name=_clean(value.get("fullName")) or "Student",
             id=value["id"],
             grade=value.get("grade"),
         )
@@ -90,7 +95,7 @@ class Ride:
             return None
         return cls(
             id=value.get("activityId"),
-            bus_id=value.get("busName"),
+            bus_id=_clean(value.get("busName")),
             start=start,
             end=cls._parse_endpoint(
                 value,
@@ -98,9 +103,9 @@ class Ride:
                 "disembarkationLatitude",
                 "disembarkationLongtitude",
             ),
-            driver=value.get("driverName"),
-            route_name=value.get("friendlyRouteDisplay"),
-            shift=value.get("shift"),
+            driver=_clean(value.get("driverName")),
+            route_name=_clean(value.get("friendlyRouteDisplay")),
+            shift=_clean(value.get("shift")),
             route_id=value.get("routeId"),
         )
 
