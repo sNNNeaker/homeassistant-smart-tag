@@ -30,6 +30,16 @@ Polling is adaptive: every minute inside a ride window or while a student is on 
 1. Install "SMART tag" and restart Home Assistant.
 1. Go to Settings -> Devices & services -> Add integration -> "SMART tag" and log in with your parent portal email and password. The password is not stored, only the session tokens.
 
+## Roadmap
+
+Planned or under consideration, no promises:
+
+- Live bus location as a `device_tracker` while a student is on the bus, plus a "bus approaching" binary sensor (needs the portal's authenticated live-location endpoint, not identified yet).
+- Timestamp sensors for boarding and drop-off times.
+- Event entities (`boarded`, `dropped_off`) for automations.
+- Ride windows from a school calendar or learned from ride history; skip holidays.
+- Diagnostics download, tests.
+
 ## License
 
 GPL-3.0, see [LICENSE](LICENSE).
