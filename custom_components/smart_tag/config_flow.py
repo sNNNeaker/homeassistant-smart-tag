@@ -118,7 +118,8 @@ class SmartTagConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_reauth(
-        self, entry_data: Mapping[str, Any]  # noqa: ARG002
+        self,
+        entry_data: Mapping[str, Any],  # noqa: ARG002
     ) -> ConfigFlowResult:
         """Handle a reauthentication request."""
         return await self.async_step_reauth_confirm()
