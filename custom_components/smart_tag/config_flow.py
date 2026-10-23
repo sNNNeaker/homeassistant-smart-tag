@@ -1,15 +1,18 @@
-"""Adds config flow for SMART Tag."""
+"""Adds config flow for SMART tag."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import time, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
-from homeassistant import config_entries, data_entry_flow
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
-from homeassistant.exceptions import InvalidStateError
+from homeassistant.core import callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
@@ -19,104 +22,75 @@ from .api import (
     SmartTagApiError,
     SmartTagApiNetworkError,
 )
-from .const import CONF_ROUTES, CONF_STUDENT, DOMAIN, LOGGER
+from .const import (
+    CONF_ACCESS_TOKEN,
+    CONF_AFTERNOON_END,
+    CONF_AFTERNOON_START,
+    CONF_MORNING_END,
+    CONF_MORNING_START,
+    CONF_REFRESH_TOKEN,
+    CONF_WEEKDAYS_ONLY,
+    DEFAULT_AFTERNOON_END,
+    DEFAULT_AFTERNOON_START,
+    DEFAULT_MORNING_END,
+    DEFAULT_MORNING_START,
+    DEFAULT_WEEKDAYS_ONLY,
+    DOMAIN,
+    LOGGER,
+)
 
 if TYPE_CHECKING:
-    from custom_components.smart_tag.data import Ride
+    from collections.abc import Mapping
 
 
-@dataclass
-class Route:
-    """Route polling data"""
-
-    # start embark polling
-    embark_start: time
-
-    # stop polling if they haven't embarked by this time
-    embark_end: time
-
-    # start debark polling this many minutes after embarkation time
-    length: float
-
-    # give up debark polling by this time
-    debark_end: time
-
-    id: int
-    name: str
-
-    DISPLAY_TIME_FORMAT = "%I:%M %p"
-
-    def display(self):
-        """Return a human-readable string representing this route."""
-        return f"**{self.name}** (Embark start: {self.embark_start.strftime(self.DISPLAY_TIME_FORMAT)} • Embark end: {self.embark_end.strftime(self.DISPLAY_TIME_FORMAT)} • Ride length: {self.length:.2f} min • Debark end: {self.debark_end.strftime(self.DISPLAY_TIME_FORMAT)})"
-
-
-def average_route_polling_data(data: list[Ride]):
-    """Average a list of rides into a Route polling data"""
-    embark_start_min = time(23, 59, 59)
-    embark_end_max = time(0, 0)
-    debark_end_max = time(0, 0)
-    length_secs = 0
-
-    # Knuth 1998 - average
-    for i, ride in enumerate(data):
-        embark_start_min = min(embark_start_min, ride.start.time.time())
-        embark_end_max = max(
-            embark_end_max, (ride.start.time + timedelta(minutes=5)).time()
-        )
-        debark_end_max = max(
-            debark_end_max, (ride.end.time + timedelta(minutes=10)).time()
-        )
-        length_secs += ((ride.end.time - ride.start.time).seconds - length_secs) / (
-            i + 1
-        )
-
-    return Route(
-        embark_start=embark_start_min,
-        embark_end=embark_end_max,
-        length=length_secs / 60.0,
-        debark_end=debark_end_max,
-        id=data[0].route_id,
-        name=data[0].route_name,
-    )
-
-
-class SmartTagConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for SMART Tag."""
+class SmartTagConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Config flow for SMART tag."""
 
     VERSION = 1
 
-    def __init__(self) -> None:
-        """Initialize the class"""
-        super().__init__()
-
-        self._api_client = None
+    async def _async_login(
+        self, email: str, password: str, errors: dict[str, str]
+    ) -> SmartTagApiClient | None:
+        """Log in and check for students; set errors and return None on failure."""
+        client = SmartTagApiClient(async_create_clientsession(self.hass))
+        try:
+            await client.login(email, password)
+            students = await client.get_students()
+        except SmartTagApiAuthError as exception:
+            LOGGER.warning(exception)
+            errors["base"] = "auth"
+        except SmartTagApiNetworkError as exception:
+            LOGGER.error(exception)
+            errors["base"] = "connection"
+        except SmartTagApiError as exception:
+            LOGGER.exception(exception)
+            errors["base"] = "unknown"
+        else:
+            if students:
+                return client
+            errors["base"] = "no_students"
+        return None
 
     async def async_step_user(
         self,
-        user_input: dict | None = None,
-    ) -> data_entry_flow.FlowResult:
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
         """Handle a flow initialized by the user."""
-        if self._api_client is None:
-            self._api_client = SmartTagApiClient(async_create_clientsession(self.hass))
-
-        _errors = {}
+        errors: dict[str, str] = {}
         if user_input is not None:
-            try:
-                await self._api_client.login(
-                    user_input[CONF_EMAIL], user_input[CONF_PASSWORD]
+            email = user_input[CONF_EMAIL].strip()
+            client = await self._async_login(email, user_input[CONF_PASSWORD], errors)
+            if client is not None:
+                await self.async_set_unique_id(email.lower())
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title=email,
+                    data={
+                        CONF_EMAIL: email,
+                        CONF_ACCESS_TOKEN: client.access_token,
+                        CONF_REFRESH_TOKEN: client.refresh_token,
+                    },
                 )
-            except SmartTagApiAuthError as exception:
-                LOGGER.warning(exception)
-                _errors["base"] = "auth"
-            except SmartTagApiNetworkError as exception:
-                LOGGER.error(exception)
-                _errors["base"] = "connection"
-            except SmartTagApiError as exception:
-                LOGGER.exception(exception)
-                _errors["base"] = "unknown"
-            else:
-                return await self.async_step_choose_student()
 
         return self.async_show_form(
             step_id="user",
@@ -140,111 +114,94 @@ class SmartTagConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 },
             ),
-            errors=_errors,
+            errors=errors,
         )
 
-    async def async_step_choose_student(self, user_input: dict | None = None):
-        """Prompt the user to select one of their students."""
-        if self._api_client is None:
-            raise InvalidStateError("invalid state")
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Handle a reauthentication request."""
+        return await self.async_step_reauth_confirm()
 
-        _errors = {}
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for the password again."""
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
         if user_input is not None:
-            self._student_id = str(user_input[CONF_STUDENT])
-            return await self.async_step_choose_times()
-
-        students = []
-
-        # load a list of students
-        try:
-            students = await self._api_client.get_students()
-        except SmartTagApiAuthError as exception:
-            LOGGER.warning(exception)
-            _errors["base"] = "auth"
-        except SmartTagApiNetworkError as exception:
-            LOGGER.error(exception)
-            _errors["base"] = "connection"
-        except SmartTagApiError as exception:
-            LOGGER.exception(exception)
-            _errors["base"] = "unknown"
+            client = await self._async_login(
+                entry.data[CONF_EMAIL], user_input[CONF_PASSWORD], errors
+            )
+            if client is not None:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={
+                        CONF_ACCESS_TOKEN: client.access_token,
+                        CONF_REFRESH_TOKEN: client.refresh_token,
+                    },
+                )
 
         return self.async_show_form(
-            step_id="choose_student",
+            step_id="reauth_confirm",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_STUDENT): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            # radio buttons
-                            mode=selector.SelectSelectorMode.LIST,
-                            options=[
-                                # one option for each student
-                                selector.SelectOptionDict(
-                                    value=str(student.id),
-                                    label=f"{student.full_name} ({student.grade}) #{student.external_id}",
-                                )
-                                for student in students
-                            ],
-                        )
-                    )
-                }
+                    vol.Required(CONF_PASSWORD): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD,
+                        ),
+                    ),
+                },
             ),
-            errors=_errors,
+            description_placeholders={"email": entry.data[CONF_EMAIL]},
+            errors=errors,
         )
 
-    async def async_step_choose_times(self, user_input: dict | None = None):
-        """Ask the user to select the polling times"""
-        if self._api_client is None or self._student_id is None:
-            raise InvalidStateError("invalid state")
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> SmartTagOptionsFlow:
+        """Return the options flow."""
+        return SmartTagOptionsFlow()
 
-        _errors = {}
 
+class SmartTagOptionsFlow(OptionsFlow):
+    """Options flow: ride windows used for adaptive polling."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage the options."""
         if user_input is not None:
-            pass
+            return self.async_create_entry(data=user_input)
 
-        # get the 50 most recent rides
-        rides = []
-        try:
-            rides = await self._api_client.get_rides(self._student_id, 50)
-        except SmartTagApiAuthError as exception:
-            LOGGER.warning(exception)
-            _errors["base"] = "auth"
-        except SmartTagApiNetworkError as exception:
-            LOGGER.error(exception)
-            _errors["base"] = "connection"
-        except SmartTagApiError as exception:
-            LOGGER.exception(exception)
-            _errors["base"] = "unknown"
-
-        routes: dict[int, list[Ride]] = {}
-        for ride in rides:
-            if ride.route_id in routes:
-                routes[ride.route_id].append(ride)
-            else:
-                routes[ride.route_id] = [ride]
-
-        # average all items together
-        avg_routes = [average_route_polling_data(rides) for rides in routes.values()]
-
+        options = self.config_entry.options
+        time_selector = selector.TimeSelector()
         return self.async_show_form(
-            step_id="choose_times",
+            step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_ROUTES): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            # radio buttons
-                            mode=selector.SelectSelectorMode.LIST,
-                            multiple=True,
-                            options=[
-                                # one option for each student
-                                selector.SelectOptionDict(
-                                    value=str(route.id),
-                                    label=route.display(),
-                                )
-                                for route in avg_routes
-                            ],
-                        )
-                    )
+                    vol.Required(
+                        CONF_MORNING_START,
+                        default=options.get(CONF_MORNING_START, DEFAULT_MORNING_START),
+                    ): time_selector,
+                    vol.Required(
+                        CONF_MORNING_END,
+                        default=options.get(CONF_MORNING_END, DEFAULT_MORNING_END),
+                    ): time_selector,
+                    vol.Required(
+                        CONF_AFTERNOON_START,
+                        default=options.get(
+                            CONF_AFTERNOON_START, DEFAULT_AFTERNOON_START
+                        ),
+                    ): time_selector,
+                    vol.Required(
+                        CONF_AFTERNOON_END,
+                        default=options.get(CONF_AFTERNOON_END, DEFAULT_AFTERNOON_END),
+                    ): time_selector,
+                    vol.Required(
+                        CONF_WEEKDAYS_ONLY,
+                        default=options.get(CONF_WEEKDAYS_ONLY, DEFAULT_WEEKDAYS_ONLY),
+                    ): selector.BooleanSelector(),
                 }
             ),
-            errors=_errors,
         )

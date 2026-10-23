@@ -1,8 +1,8 @@
 """
-Custom integration to integrate smart_tag with Home Assistant.
+Custom integration to integrate SMART tag with Home Assistant.
 
 For more details about this integration, please refer to
-to https://github.com/grimsteel/homeassistant-smart-tag
+https://github.com/sNNNeaker/homeassistant-smart-tag
 """
 
 from __future__ import annotations
@@ -11,11 +11,9 @@ from typing import TYPE_CHECKING
 
 from homeassistant.const import Platform
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.loader import async_get_loaded_integration
-
-from custom_components.smart_tag.const import CONF_ACCESS_TOKEN, CONF_REFRESH_TOKEN
 
 from .api import SmartTagApiClient
+from .const import CONF_ACCESS_TOKEN, CONF_REFRESH_TOKEN
 from .coordinator import SmartTagCoordinator
 from .data import SmartTagData
 
@@ -25,9 +23,8 @@ if TYPE_CHECKING:
     from .data import SmartTagEntry
 
 PLATFORMS: list[Platform] = [
-    Platform.SENSOR,
     Platform.BINARY_SENSOR,
-    Platform.SWITCH,
+    Platform.SENSOR,
 ]
 
 
@@ -37,25 +34,30 @@ async def async_setup_entry(
     entry: SmartTagEntry,
 ) -> bool:
     """Set up this integration using UI."""
-    coordinator = SmartTagCoordinator(
-        hass=hass,
-    )
     client = SmartTagApiClient(
         session=async_get_clientsession(hass),
         access_token=entry.data[CONF_ACCESS_TOKEN],
         refresh_token=entry.data[CONF_REFRESH_TOKEN],
     )
-    entry.runtime_data = SmartTagData(
-        client=client,
-        integration=async_get_loaded_integration(hass, entry.domain),
-        coordinator=coordinator,
-    )
+    coordinator = SmartTagCoordinator(hass, entry, client)
+    entry.runtime_data = SmartTagData(client=client, coordinator=coordinator)
 
     # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
     await coordinator.async_config_entry_first_refresh()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+
+    # Reload only when the options change (token updates modify entry.data).
+    options_at_setup = dict(entry.options)
+
+    async def _async_options_updated(
+        hass: HomeAssistant, updated_entry: SmartTagEntry
+    ) -> None:
+        """Reload the entry if its options changed."""
+        if dict(updated_entry.options) != options_at_setup:
+            hass.config_entries.async_schedule_reload(updated_entry.entry_id)
+
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     return True
 
@@ -66,12 +68,3 @@ async def async_unload_entry(
 ) -> bool:
     """Handle removal of an entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-
-async def async_reload_entry(
-    hass: HomeAssistant,
-    entry: SmartTagEntry,
-) -> None:
-    """Reload config entry."""
-    await async_unload_entry(hass, entry)
-    await async_setup_entry(hass, entry)

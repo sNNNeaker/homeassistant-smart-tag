@@ -1,35 +1,41 @@
-# SMART Tag Home Assistant Integratin
+# SMART tag Home Assistant Integration
 
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
 
-_Integration to integrate with [SMART Tag parent portal](https://parent.smart-tag.net)._
+_Integration for the [SMART tag parent portal](https://parent.smart-tag.net) (school bus tracking)._
 
-**This integration will set up the following platforms for each student:**
+**Unofficial:** this project is not affiliated with or endorsed by SMART tag. It is a fork of [grimsteel/homeassistant-smart-tag](https://github.com/grimsteel/homeassistant-smart-tag); credit for the original API client and idea goes to grimsteel.
 
-Platform | Description
+## Entities
+
+One config entry per parent account. For every student linked to the account a device is created with:
+
+Entity | Description
 -- | --
-On Bus (`binary_sensor`) | Whether the student is current on a bus.
-Last Bus (`sensor`) | The last bus number the student was on (includes bus route/driver)
-Enable Polling (`switch`) | Whether to enable polling for updates for this student (can be turned off if they stop riding the bus)
+On bus (`binary_sensor`) | Whether the student is currently on a bus.
+Bus status (`sensor`) | `on_bus`, `dropped_off` or `no_ride_today`. Attributes describe the latest ride: `bus`, `route`, `driver`, `shift`, `boarded_at`, `boarded_latitude`, `boarded_longitude`, `dropped_off_at`, `dropped_off_latitude`, `dropped_off_longitude`.
+
+## Options
+
+Polling is adaptive: every minute inside a ride window or while a student is on the bus, otherwise at most every 30 minutes (and in time for the next window). Configure under the integration's options:
+
+- Morning start / end (default 06:30 - 08:45)
+- Afternoon start / end (default 14:30 - 17:00)
+- Weekdays only (default on)
 
 ## Installation
 
-1. Download the `custom_components/smart_tag/` directory into your HA `custom_components` dire
-1. Restart Home Assistant
-1. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "SMART Tag"
+1. In HACS, open the menu, choose "Custom repositories" and add `https://github.com/sNNNeaker/homeassistant-smart-tag` as category "Integration".
+1. Install "SMART tag" and restart Home Assistant.
+1. Go to Settings -> Devices & services -> Add integration -> "SMART tag" and log in with your parent portal email and password. The password is not stored, only the session tokens.
 
-**Configuration is done in the UI**
+## License
 
-<!---->
+GPL-3.0, see [LICENSE](LICENSE).
 
-## Contributions are welcome!
+[commits-shield]: https://img.shields.io/github/commit-activity/y/sNNNeaker/homeassistant-smart-tag.svg?style=for-the-badge
+[commits]: https://github.com/sNNNeaker/homeassistant-smart-tag/commits/main
 
-
-***
-
-[commits-shield]: https://img.shields.io/github/commit-activity/y/grimsteel/homeassistant-smart-tag.svg?style=for-the-badge
-[commits]: https://github.com/grimsteel/homeassistant-smart-tag/commits/main
-
-[releases-shield]: https://img.shields.io/github/release/grimsteel/homeassistant-smart-tag.svg?style=for-the-badge
-[releases]: https://github.com/grimsteel/homeassistant-smart-tag/releases
+[releases-shield]: https://img.shields.io/github/release/sNNNeaker/homeassistant-smart-tag.svg?style=for-the-badge
+[releases]: https://github.com/sNNNeaker/homeassistant-smart-tag/releases

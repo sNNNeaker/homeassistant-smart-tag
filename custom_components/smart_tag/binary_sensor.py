@@ -1,61 +1,57 @@
-"""Binary sensor platform for integration_blueprint."""
+"""Binary sensor platform for smart_tag."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
+from homeassistant.util import dt as dt_util
 
-from .entity import IntegrationBlueprintEntity
+from .const import STATUS_ON_BUS
+from .data import ride_status
+from .entity import SmartTagEntity
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-    from .coordinator import BlueprintDataUpdateCoordinator
-    from .data import IntegrationBlueprintConfigEntry
+    from .coordinator import SmartTagCoordinator
+    from .data import SmartTagEntry
 
-ENTITY_DESCRIPTIONS = (
-    BinarySensorEntityDescription(
-        key="integration_blueprint",
-        name="Integration Blueprint Binary Sensor",
-        device_class=BinarySensorDeviceClass.CONNECTIVITY,
-    ),
+ENTITY_DESCRIPTION = BinarySensorEntityDescription(
+    key="on_bus",
+    translation_key="on_bus",
+    icon="mdi:bus-school",
 )
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,  # noqa: ARG001 Unused function argument: `hass`
-    entry: IntegrationBlueprintConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant,
+    entry: SmartTagEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the binary_sensor platform."""
+    coordinator = entry.runtime_data.coordinator
     async_add_entities(
-        IntegrationBlueprintBinarySensor(
-            coordinator=entry.runtime_data.coordinator,
-            entity_description=entity_description,
-        )
-        for entity_description in ENTITY_DESCRIPTIONS
+        SmartTagOnBusSensor(coordinator, student_id) for student_id in coordinator.data
     )
 
 
-class IntegrationBlueprintBinarySensor(IntegrationBlueprintEntity, BinarySensorEntity):
-    """integration_blueprint binary_sensor class."""
+class SmartTagOnBusSensor(SmartTagEntity, BinarySensorEntity):
+    """Whether a student is currently on the bus."""
 
-    def __init__(
-        self,
-        coordinator: BlueprintDataUpdateCoordinator,
-        entity_description: BinarySensorEntityDescription,
-    ) -> None:
-        """Initialize the binary_sensor class."""
-        super().__init__(coordinator)
-        self.entity_description = entity_description
+    def __init__(self, coordinator: SmartTagCoordinator, student_id: int) -> None:
+        """Initialize the binary sensor."""
+        super().__init__(coordinator, student_id, ENTITY_DESCRIPTION.key)
+        self.entity_description = ENTITY_DESCRIPTION
 
     @property
-    def is_on(self) -> bool:
-        """Return true if the binary_sensor is on."""
-        return self.coordinator.data.get("title", "") == "foo"
+    def is_on(self) -> bool | None:
+        """Return true if the student is on the bus."""
+        data = self.student_data
+        if data is None:
+            return None
+        return ride_status(data.rides, dt_util.now())[0] == STATUS_ON_BUS

@@ -1,15 +1,15 @@
-"""Sample API Client."""
+"""API client for the SMART tag parent portal."""
 
 from __future__ import annotations
 
+import asyncio
 import socket
 from urllib.parse import unquote
 
 import aiohttp
-import async_timeout
 from yarl import URL
 
-from custom_components.smart_tag.data import Ride, Student
+from .data import Ride, Student
 
 API_ORIGIN = URL("https://api-parentapp-prod.azurewebsites.net/")
 
@@ -19,7 +19,7 @@ class SmartTagApiError(Exception):
 
 
 class SmartTagApiNetworkError(SmartTagApiError):
-    """Exception to indicate a network error"""
+    """Exception to indicate a network error."""
 
 
 class SmartTagApiAuthError(SmartTagApiError):
@@ -103,7 +103,7 @@ class SmartTagApiClient:
 
         return [Student.from_dict(d) for d in await response.json()]
 
-    async def get_rides(self, student_id: str, limit: int):
+    async def get_rides(self, student_id: str | int, limit: int):
         """Get the {limit} most recent rides for this student"""
         if self.access_token is None:
             raise SmartTagApiAuthError("not authenticated")
@@ -114,7 +114,8 @@ class SmartTagApiClient:
         )
         json = await response.json()
 
-        return [Ride.from_dict(d) for d in json["data"]]
+        rides = (Ride.from_dict(d) for d in json["data"])
+        return [ride for ride in rides if ride is not None]
 
     async def _api_wrapper(
         self,
@@ -125,17 +126,22 @@ class SmartTagApiClient:
         headers: dict | None = None,
     ):
         """Make a call to the SMART Tag API with error handling."""
+        url = self._api_origin / path
+        if query:
+            url = url.with_query(query)
         try:
-            async with async_timeout.timeout(10):
+            async with asyncio.timeout(10):
                 response = await self._session.request(
                     method=method,
-                    url=self._api_origin / path % query,
+                    url=url,
                     headers=headers,
                     json=data,
                 )
                 _raise_response_error(response)
                 return response
 
+        except SmartTagApiError:
+            raise
         except TimeoutError as exception:
             err = f"Timeout error fetching information - {exception}"
             raise SmartTagApiNetworkError(err) from exception
