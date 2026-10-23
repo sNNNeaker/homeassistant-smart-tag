@@ -32,7 +32,7 @@ ENTITY_DESCRIPTION = SensorEntityDescription(
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    hass: HomeAssistant,  # noqa: ARG001
     entry: SmartTagEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:

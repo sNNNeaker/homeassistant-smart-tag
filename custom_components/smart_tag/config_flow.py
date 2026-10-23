@@ -118,7 +118,7 @@ class SmartTagConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_reauth(
-        self, entry_data: Mapping[str, Any]
+        self, entry_data: Mapping[str, Any]  # noqa: ARG002
     ) -> ConfigFlowResult:
         """Handle a reauthentication request."""
         return await self.async_step_reauth_confirm()
@@ -159,7 +159,9 @@ class SmartTagConfigFlow(ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> SmartTagOptionsFlow:
+    def async_get_options_flow(
+        config_entry: ConfigEntry,  # noqa: ARG004
+    ) -> SmartTagOptionsFlow:
         """Return the options flow."""
         return SmartTagOptionsFlow()
 
