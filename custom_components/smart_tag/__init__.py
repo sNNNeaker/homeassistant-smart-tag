@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from homeassistant.const import Platform
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .api import SmartTagApiClient
 from .const import CONF_ACCESS_TOKEN, CONF_REFRESH_TOKEN
@@ -35,7 +35,7 @@ async def async_setup_entry(
 ) -> bool:
     """Set up this integration using UI."""
     client = SmartTagApiClient(
-        session=async_get_clientsession(hass),
+        session=async_create_clientsession(hass),
         access_token=entry.data[CONF_ACCESS_TOKEN],
         refresh_token=entry.data[CONF_REFRESH_TOKEN],
     )

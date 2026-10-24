@@ -33,9 +33,33 @@ Polling is adaptive: every minute inside a ride window or while a student is on 
 
 ## Installation
 
-1. In HACS, open the menu, choose "Custom repositories" and add `https://github.com/sNNNeaker/homeassistant-smart-tag` as category "Integration".
-1. Install "SMART tag" and restart Home Assistant.
-1. Go to Settings -> Devices & services -> Add integration -> "SMART tag" and log in with your parent portal email and password. The password is not stored, only the session tokens.
+SMART tag is in the HACS community catalog, so you can find it by name; no custom repository is needed.
+
+### Via the Marketplace (Home Assistant 2026.11 and newer)
+
+From 2026.11 HACS is built into Home Assistant as the **Marketplace** (Settings → Marketplace).
+
+1. Search for **SMART tag** and download it. Catalog entries install from the release asset, so no GitHub connection is needed, and no restart is needed on first install.
+2. Settings → Devices & services → Add integration → **SMART tag**, or use
+   [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=smart_tag)
+
+Updates show up under Settings → Updates; installing an update needs a restart, which the Marketplace offers via a repair.
+
+### Via HACS (Home Assistant 2026.10 and older)
+
+1. In HACS, search for **SMART tag** and download it.
+2. Restart Home Assistant.
+3. Settings → Devices & services → Add integration → **SMART tag**.
+
+If you added this repository as a custom repository before it joined the catalog, that keeps working; you can remove the custom entry (HACS ⋮ menu → Custom repositories) without uninstalling.
+
+### Manual
+
+Copy `custom_components/smart_tag/` to `config/custom_components/smart_tag/`, restart Home Assistant, then add the integration as above.
+
+### Setup
+
+Log in with your parent portal email and password. The password is not stored, only the session tokens.
 
 ## Roadmap
 
