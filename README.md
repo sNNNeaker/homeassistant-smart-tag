@@ -1,3 +1,10 @@
+<p align="center">
+  <!-- Plain <img> with an absolute URL: the HACS/Marketplace README renderer
+       doesn't support <picture>/<source>, and relative paths only resolve on
+       GitHub. -->
+  <img alt="SMART tag" src="https://raw.githubusercontent.com/sNNNeaker/homeassistant-smart-tag/main/custom_components/smart_tag/brand/logo%402x.png" width="420">
+</p>
+
 # SMART tag Home Assistant Integration
 
 [![GitHub Release][releases-shield]][releases]
