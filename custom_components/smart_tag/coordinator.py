@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time as time_module
 from datetime import datetime, time, timedelta
 from typing import TYPE_CHECKING
 
@@ -31,7 +32,7 @@ from .const import (
     LOGGER,
     STATUS_ON_BUS,
 )
-from .data import StudentData, ride_status
+from .data import LiveActivity, StudentData, ride_status
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -41,6 +42,8 @@ if TYPE_CHECKING:
 RIDES_PER_STUDENT = 5
 ACTIVE_INTERVAL = timedelta(seconds=60)
 IDLE_INTERVAL = timedelta(minutes=30)
+LIVE_INTERVAL = timedelta(seconds=10)
+FULL_REFRESH_SECONDS = 60
 
 
 def _parse_time(value: str, default: str) -> time:
@@ -69,6 +72,8 @@ class SmartTagCoordinator(DataUpdateCoordinator[dict[int, StudentData]]):
             update_interval=ACTIVE_INTERVAL,
         )
         self.client = client
+        self._full_data: dict[int, StudentData] | None = None
+        self._last_full: float = 0.0
 
     def _windows(self, day: datetime) -> list[tuple[datetime, datetime]]:
         """Return the configured ride windows for the day of the given datetime."""
@@ -150,15 +155,46 @@ class SmartTagCoordinator(DataUpdateCoordinator[dict[int, StudentData]]):
                 },
             )
 
+    async def _full_refresh(self) -> dict[int, StudentData]:
+        """Fetch students and their rides."""
+        students = await self.client.get_students()
+        result: dict[int, StudentData] = {}
+        for student in students:
+            rides = await self.client.get_rides(student.id, RIDES_PER_STUDENT)
+            rides.sort(key=lambda ride: ride.start.time, reverse=True)
+            result[student.id] = StudentData(student=student, rides=rides)
+        return result
+
+    async def _fetch_live(self, student_id: int) -> LiveActivity | None:
+        """Fetch the live position; any non-auth failure just means no live data."""
+        try:
+            return await self.client.get_live_activity(student_id)
+        except SmartTagApiAuthError:
+            raise
+        except SmartTagApiError as exception:
+            LOGGER.debug("Could not fetch live activity: %s", exception)
+        return None
+
     async def _async_update_data(self) -> dict[int, StudentData]:
         """Update data via library."""
+        now = dt_util.now()
         try:
-            students = await self.client.get_students()
+            if (
+                self._full_data is None
+                or time_module.monotonic() - self._last_full >= FULL_REFRESH_SECONDS
+            ):
+                self._full_data = await self._full_refresh()
+                self._last_full = time_module.monotonic()
+
             result: dict[int, StudentData] = {}
-            for student in students:
-                rides = await self.client.get_rides(student.id, RIDES_PER_STUDENT)
-                rides.sort(key=lambda ride: ride.start.time, reverse=True)
-                result[student.id] = StudentData(student=student, rides=rides)
+            on_bus = False
+            for student_id, cached in self._full_data.items():
+                student_on_bus = ride_status(cached.rides, now)[0] == STATUS_ON_BUS
+                on_bus = on_bus or student_on_bus
+                live = await self._fetch_live(student_id) if student_on_bus else None
+                result[student_id] = StudentData(
+                    student=cached.student, rides=cached.rides, live=live
+                )
         except SmartTagApiAuthError as exception:
             raise ConfigEntryAuthFailed(exception) from exception
         except SmartTagApiError as exception:
@@ -166,9 +202,7 @@ class SmartTagCoordinator(DataUpdateCoordinator[dict[int, StudentData]]):
 
         self._persist_tokens()
 
-        now = dt_util.now()
-        on_bus = any(
-            ride_status(data.rides, now)[0] == STATUS_ON_BUS for data in result.values()
+        self.update_interval = (
+            LIVE_INTERVAL if on_bus else self._compute_interval(now, on_bus=False)
         )
-        self.update_interval = self._compute_interval(now, on_bus=on_bus)
         return result

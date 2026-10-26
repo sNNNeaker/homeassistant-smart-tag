@@ -31,14 +31,15 @@
   "options": {
     "step": {
       "init": {
-        "title": "Ride windows",
-        "description": "The integration polls every minute inside these windows (or while a student is on the bus) and less often otherwise.",
+        "title": "Ride windows and approach distance",
+        "description": "The integration polls every minute inside these windows (or while a student is on the bus) and less often otherwise. While a student is on the bus the bus position is polled every 10 seconds. The bus counts as approaching when it is closer to the home stop than the approach distance.",
         "data": {
           "morning_start": "Morning window start",
           "morning_end": "Morning window end",
           "afternoon_start": "Afternoon window start",
           "afternoon_end": "Afternoon window end",
-          "weekdays_only": "Weekdays only"
+          "weekdays_only": "Weekdays only",
+          "approach_distance": "Approach distance"
         }
       }
     }
@@ -47,9 +48,20 @@
     "binary_sensor": {
       "on_bus": {
         "name": "On bus"
+      },
+      "bus_approaching": {
+        "name": "Bus approaching"
+      }
+    },
+    "device_tracker": {
+      "school_bus": {
+        "name": "School bus"
       }
     },
     "sensor": {
+      "bus_distance_to_stop": {
+        "name": "Bus distance to stop"
+      },
       "bus_status": {
         "name": "Bus status",
         "state": {

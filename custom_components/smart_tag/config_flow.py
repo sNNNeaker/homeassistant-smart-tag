@@ -11,10 +11,12 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlow,
 )
-from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, UnitOfLength
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.util.unit_conversion import DistanceConverter
+from homeassistant.util.unit_system import METRIC_SYSTEM
 
 from .api import (
     SmartTagApiAuthError,
@@ -26,12 +28,14 @@ from .const import (
     CONF_ACCESS_TOKEN,
     CONF_AFTERNOON_END,
     CONF_AFTERNOON_START,
+    CONF_APPROACH_DISTANCE,
     CONF_MORNING_END,
     CONF_MORNING_START,
     CONF_REFRESH_TOKEN,
     CONF_WEEKDAYS_ONLY,
     DEFAULT_AFTERNOON_END,
     DEFAULT_AFTERNOON_START,
+    DEFAULT_APPROACH_DISTANCE,
     DEFAULT_MORNING_END,
     DEFAULT_MORNING_START,
     DEFAULT_WEEKDAYS_ONLY,
@@ -174,10 +178,30 @@ class SmartTagOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
+        unit = (
+            UnitOfLength.KILOMETERS
+            if self.hass.config.units is METRIC_SYSTEM
+            else UnitOfLength.MILES
+        )
+
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            data = dict(user_input)
+            data[CONF_APPROACH_DISTANCE] = round(
+                DistanceConverter.convert(
+                    data[CONF_APPROACH_DISTANCE], unit, UnitOfLength.METERS
+                )
+            )
+            return self.async_create_entry(data=data)
 
         options = self.config_entry.options
+        approach_default = round(
+            DistanceConverter.convert(
+                options.get(CONF_APPROACH_DISTANCE, DEFAULT_APPROACH_DISTANCE),
+                UnitOfLength.METERS,
+                unit,
+            ),
+            1,
+        )
         time_selector = selector.TimeSelector()
         return self.async_show_form(
             step_id="init",
@@ -205,6 +229,17 @@ class SmartTagOptionsFlow(OptionsFlow):
                         CONF_WEEKDAYS_ONLY,
                         default=options.get(CONF_WEEKDAYS_ONLY, DEFAULT_WEEKDAYS_ONLY),
                     ): selector.BooleanSelector(),
+                    vol.Required(
+                        CONF_APPROACH_DISTANCE, default=approach_default
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            mode=selector.NumberSelectorMode.BOX,
+                            min=0.1,
+                            max=20,
+                            step=0.1,
+                            unit_of_measurement=unit,
+                        )
+                    ),
                 }
             ),
         )

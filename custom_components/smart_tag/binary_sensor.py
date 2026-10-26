@@ -10,7 +10,7 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import STATUS_ON_BUS
+from .const import CONF_APPROACH_DISTANCE, DEFAULT_APPROACH_DISTANCE, STATUS_ON_BUS
 from .data import ride_status
 from .entity import SmartTagEntity
 
@@ -27,6 +27,12 @@ ENTITY_DESCRIPTION = BinarySensorEntityDescription(
     icon="mdi:bus-school",
 )
 
+APPROACHING_DESCRIPTION = BinarySensorEntityDescription(
+    key="bus_approaching",
+    translation_key="bus_approaching",
+    icon="mdi:bus-alert",
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,  # noqa: ARG001
@@ -35,9 +41,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up the binary_sensor platform."""
     coordinator = entry.runtime_data.coordinator
-    async_add_entities(
-        SmartTagOnBusSensor(coordinator, student_id) for student_id in coordinator.data
-    )
+    for student_id in coordinator.data:
+        async_add_entities(
+            [
+                SmartTagOnBusSensor(coordinator, student_id),
+                SmartTagBusApproachingSensor(coordinator, student_id),
+            ]
+        )
 
 
 class SmartTagOnBusSensor(SmartTagEntity, BinarySensorEntity):
@@ -55,3 +65,34 @@ class SmartTagOnBusSensor(SmartTagEntity, BinarySensorEntity):
         if data is None:
             return None
         return ride_status(data.rides, dt_util.now())[0] == STATUS_ON_BUS
+
+
+class SmartTagBusApproachingSensor(SmartTagEntity, BinarySensorEntity):
+    """Whether the bus is close to the student's home stop (afternoon rides)."""
+
+    def __init__(self, coordinator: SmartTagCoordinator, student_id: int) -> None:
+        """Initialize the binary sensor."""
+        super().__init__(coordinator, student_id, APPROACHING_DESCRIPTION.key)
+        self.entity_description = APPROACHING_DESCRIPTION
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the bus is within the approach distance of the stop."""
+        data = self.student_data
+        if data is None:
+            return None
+        status, ride = ride_status(data.rides, dt_util.now())
+        if (
+            data.live is None
+            or status != STATUS_ON_BUS
+            or ride is None
+            or (ride.shift or "").upper() != "PM"
+        ):
+            return False
+        distance = data.live.distance_to_home_stop()
+        if distance is None:
+            return False
+        limit = self.coordinator.config_entry.options.get(
+            CONF_APPROACH_DISTANCE, DEFAULT_APPROACH_DISTANCE
+        )
+        return distance <= limit

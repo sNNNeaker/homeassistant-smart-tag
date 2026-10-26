@@ -8,8 +8,11 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
+    SensorStateClass,
 )
+from homeassistant.const import UnitOfLength
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_system import METRIC_SYSTEM
 
 from .const import STATUS_DROPPED_OFF, STATUS_NO_RIDE_TODAY, STATUS_ON_BUS
 from .data import ride_status
@@ -30,6 +33,15 @@ ENTITY_DESCRIPTION = SensorEntityDescription(
     icon="mdi:bus-school",
 )
 
+DISTANCE_DESCRIPTION = SensorEntityDescription(
+    key="bus_distance_to_stop",
+    translation_key="bus_distance_to_stop",
+    device_class=SensorDeviceClass.DISTANCE,
+    native_unit_of_measurement=UnitOfLength.METERS,
+    suggested_display_precision=1,
+    state_class=SensorStateClass.MEASUREMENT,
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,  # noqa: ARG001
@@ -38,10 +50,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up the sensor platform."""
     coordinator = entry.runtime_data.coordinator
-    async_add_entities(
-        SmartTagBusStatusSensor(coordinator, student_id)
-        for student_id in coordinator.data
-    )
+    for student_id in coordinator.data:
+        async_add_entities(
+            [
+                SmartTagBusStatusSensor(coordinator, student_id),
+                SmartTagBusDistanceSensor(coordinator, student_id),
+            ]
+        )
 
 
 class SmartTagBusStatusSensor(SmartTagEntity, SensorEntity):
@@ -80,3 +95,25 @@ class SmartTagBusStatusSensor(SmartTagEntity, SensorEntity):
             "dropped_off_latitude": end.lat if end else None,
             "dropped_off_longitude": end.long if end else None,
         }
+
+
+class SmartTagBusDistanceSensor(SmartTagEntity, SensorEntity):
+    """Distance from the bus to the student's home stop."""
+
+    def __init__(self, coordinator: SmartTagCoordinator, student_id: int) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, student_id, DISTANCE_DESCRIPTION.key)
+        self.entity_description = DISTANCE_DESCRIPTION
+        self._attr_suggested_unit_of_measurement = (
+            UnitOfLength.KILOMETERS
+            if coordinator.hass.config.units is METRIC_SYSTEM
+            else UnitOfLength.MILES
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the distance in meters, or None without live data."""
+        data = self.student_data
+        if data is None or data.live is None:
+            return None
+        return data.live.distance_to_home_stop()

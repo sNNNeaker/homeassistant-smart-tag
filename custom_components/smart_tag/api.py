@@ -9,7 +9,7 @@ from urllib.parse import unquote
 import aiohttp
 from yarl import URL
 
-from .data import Ride, Student
+from .data import LiveActivity, Ride, Student
 
 API_ORIGIN = URL("https://api-parentapp-prod.azurewebsites.net/")
 
@@ -116,6 +116,22 @@ class SmartTagApiClient:
 
         rides = (Ride.from_dict(d) for d in json["data"])
         return [ride for ride in rides if ride is not None]
+
+    async def get_live_activity(self, student_id: str | int) -> LiveActivity | None:
+        """Get the live bus position for this student (None if unavailable)."""
+        if self.access_token is None:
+            raise SmartTagApiAuthError("not authenticated")
+
+        response = await self._authed_api_wrapper(
+            "GET", "student/live-activity", query={"studentId": student_id}
+        )
+        if not response.ok:
+            return None
+        try:
+            json = await response.json()
+        except (aiohttp.ContentTypeError, ValueError):
+            return None
+        return LiveActivity.from_dict(json)
 
     async def _api_wrapper(
         self,
