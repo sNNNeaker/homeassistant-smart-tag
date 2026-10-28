@@ -9,7 +9,10 @@ from homeassistant.components.device_tracker import (
     TrackerEntity,
     TrackerEntityDescription,
 )
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.helpers import entity_registry as er
 
+from .const import DOMAIN
 from .entity import SmartTagEntity
 
 if TYPE_CHECKING:
@@ -47,6 +50,19 @@ class SmartTagBusTracker(SmartTagEntity, TrackerEntity):
         """Initialize the tracker."""
         super().__init__(coordinator, student_id, ENTITY_DESCRIPTION.key)
         self.entity_description = ENTITY_DESCRIPTION
+
+    @property
+    def entity_picture(self) -> str | None:
+        """Return the student's photo (map marker), if the account has one."""
+        registry = er.async_get(self.hass)
+        photo_id = registry.async_get_entity_id(
+            "image", DOMAIN, self.unique_id.removesuffix("school_bus") + "photo"
+        )
+        state = self.hass.states.get(photo_id) if photo_id else None
+        # An image entity always has a proxy URL; only use it when a photo exists.
+        if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            return None
+        return state.attributes.get("entity_picture")
 
     @property
     def source_type(self) -> SourceType:

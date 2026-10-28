@@ -22,9 +22,10 @@ Entity | Description
 -- | --
 On bus (`binary_sensor`) | Whether the student is currently on a bus.
 Bus status (`sensor`) | `on_bus`, `dropped_off` or `no_ride_today`. Attributes describe the latest ride: `bus`, `route`, `driver`, `shift`, `boarded_at`, `boarded_latitude`, `boarded_longitude`, `dropped_off_at`, `dropped_off_latitude`, `dropped_off_longitude`.
-School bus (`device_tracker`) | Live GPS position of the bus the student is riding (unknown when no bus is active). Attributes: `speed_mph`, `heading`, `direction`, `gps_time`, `bus`, `route`, `home_stop`.
+School bus (`device_tracker`) | Live GPS position of the bus the student is riding (unknown when no bus is active), with the student's photo as picture. The API only knows the bus once the student has scanned on, so there is no position before boarding. Attributes: `speed_mph`, `heading`, `direction`, `gps_time`, `bus`, `route`, `home_stop`.
 Bus distance to stop (`sensor`) | Distance from the bus to the student's assigned home stop (shown in km or miles per your unit system); unknown when no live data.
 Bus approaching (`binary_sensor`) | On when a student is on an afternoon (PM) ride and the bus is within the approach distance of the home stop. Morning rides start at the home stop, so they never trigger it.
+Photo (`image`) | The student's photo from the portal, checked once a day; unknown if the portal has none. The school bus tracker uses it as its picture, so the map marker shows the student.
 
 Live position is polled every 10 seconds, only while a student is on the bus.
 

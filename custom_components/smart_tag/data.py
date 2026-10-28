@@ -68,6 +68,7 @@ class Student:
             full_name=_clean(value.get("fullName")) or "Student",
             id=value["id"],
             grade=value.get("grade"),
+            photo_location=value.get("photoLocation") or None,
         )
 
     campus: str | None
@@ -75,6 +76,7 @@ class Student:
     full_name: str
     id: int
     grade: str | None
+    photo_location: str | None = None
 
 
 @dataclass

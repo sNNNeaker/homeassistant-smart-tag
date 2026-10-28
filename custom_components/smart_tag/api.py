@@ -133,6 +133,20 @@ class SmartTagApiClient:
             return None
         return LiveActivity.from_dict(json)
 
+    async def get_photo(self, photo_location: str) -> tuple[bytes, str] | None:
+        """Get a student's photo as (bytes, content type); None if there is none."""
+        if self.access_token is None:
+            raise SmartTagApiAuthError("not authenticated")
+
+        # photoLocation is a relative API path, e.g. "student/photo?studentId=1"
+        path, _, query = photo_location.partition("?")
+        params = dict(pair.split("=", 1) for pair in query.split("&") if "=" in pair)
+        response = await self._authed_api_wrapper("GET", path, query=params)
+        content_type = response.headers.get("Content-Type", "").split(";")[0]
+        if not response.ok or not content_type.startswith("image/"):
+            return None
+        return await response.read(), content_type
+
     async def _api_wrapper(
         self,
         method: str,

@@ -58,6 +58,11 @@
         "name": "School bus"
       }
     },
+    "image": {
+      "photo": {
+        "name": "Photo"
+      }
+    },
     "sensor": {
       "bus_distance_to_stop": {
         "name": "Bus distance to stop"
