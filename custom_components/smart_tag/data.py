@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import datetime, time, timedelta
 from math import asin, cos, radians, sin, sqrt
 from typing import TYPE_CHECKING
 
@@ -56,6 +56,49 @@ class SmartTagData:
 
 
 @dataclass
+class StudentRoute:
+    """A scheduled route of a student (times are local, without a date)."""
+
+    TIME_FORMAT = "%I:%M %p"
+
+    @classmethod
+    def from_dict(cls, value: dict) -> StudentRoute | None:
+        """Convert a student2Routes item to a StudentRoute (None if unusable)."""
+        try:
+            pickup = datetime.strptime(  # noqa: DTZ007
+                str(value.get("pickupStopTimes")).strip(), cls.TIME_FORMAT
+            ).time()
+            dropoff = datetime.strptime(  # noqa: DTZ007
+                str(value.get("dropOffStopTimes")).strip(), cls.TIME_FORMAT
+            ).time()
+        except ValueError:
+            return None
+        return cls(
+            route_id=value.get("routeId"),
+            name=_clean(value.get("friendlyRouteDisplay")),
+            group=(_clean(value.get("routeGroup")) or "").upper(),
+            pickup=pickup,
+            dropoff=dropoff,
+        )
+
+    route_id: int | None
+    name: str | None
+    group: str
+    pickup: time
+    dropoff: time
+
+
+def _parse_routes(value: dict) -> list[StudentRoute]:
+    """Parse the student2Routes of a student, skipping unusable items."""
+    routes = (
+        StudentRoute.from_dict(item)
+        for item in value.get("student2Routes") or []
+        if isinstance(item, dict)
+    )
+    return [route for route in routes if route is not None]
+
+
+@dataclass
 class Student:
     """A student from the SMART tag portal."""
 
@@ -69,6 +112,7 @@ class Student:
             id=value["id"],
             grade=value.get("grade"),
             photo_location=value.get("photoLocation") or None,
+            routes=_parse_routes(value),
         )
 
     campus: str | None
@@ -77,6 +121,7 @@ class Student:
     id: int
     grade: str | None
     photo_location: str | None = None
+    routes: list[StudentRoute] = field(default_factory=list)
 
 
 @dataclass
@@ -241,3 +286,27 @@ def ride_status(rides: list[Ride], now: datetime) -> tuple[str, Ride | None]:
     if ride.end is None:
         return (STATUS_ON_BUS, ride)
     return (STATUS_DROPPED_OFF, ride)
+
+def next_pickup(
+    routes: list[StudentRoute],
+    now: datetime,
+    delayed_days: set[int],
+    *,
+    weekdays_only: bool,
+) -> tuple[datetime, StudentRoute] | None:
+    """Return the next scheduled AM pickup and its route, or None."""
+    am_routes = sorted(
+        (route for route in routes if route.group == "AM"),
+        key=lambda route: route.pickup,
+    )
+    if not am_routes:
+        return None
+    for offset in range(8):
+        day = now.date() + timedelta(days=offset)
+        if weekdays_only and day.weekday() >= 5:
+            continue
+        route = am_routes[-1] if day.weekday() in delayed_days else am_routes[0]
+        pickup = datetime.combine(day, route.pickup, tzinfo=now.tzinfo)
+        if pickup > now:
+            return (pickup, route)
+    return None

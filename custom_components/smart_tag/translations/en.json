@@ -32,15 +32,29 @@
     "step": {
       "init": {
         "title": "Ride windows and approach distance",
-        "description": "The integration polls every minute inside these windows (or while a student is on the bus) and less often otherwise. While a student is on the bus the bus position is polled every 10 seconds. The bus counts as approaching when it is closer to the home stop than the approach distance.",
+        "description": "The integration polls every minute inside these windows (or while a student is on the bus) and less often otherwise. While a student is on the bus the bus position is polled every 10 seconds. The bus counts as approaching when it is closer to the home stop than the approach distance. On delayed-start days the next bus pickup uses the later morning route.",
         "data": {
           "morning_start": "Morning window start",
           "morning_end": "Morning window end",
           "afternoon_start": "Afternoon window start",
           "afternoon_end": "Afternoon window end",
           "weekdays_only": "Weekdays only",
+          "delayed_start_days": "Delayed-start days",
           "approach_distance": "Approach distance"
         }
+      }
+    }
+  },
+  "selector": {
+    "weekday": {
+      "options": {
+        "mon": "Monday",
+        "tue": "Tuesday",
+        "wed": "Wednesday",
+        "thu": "Thursday",
+        "fri": "Friday",
+        "sat": "Saturday",
+        "sun": "Sunday"
       }
     }
   },
@@ -66,6 +80,9 @@
     "sensor": {
       "bus_distance_to_stop": {
         "name": "Bus distance to stop"
+      },
+      "bus_next_pickup": {
+        "name": "Bus next pickup"
       },
       "bus_status": {
         "name": "Bus status",

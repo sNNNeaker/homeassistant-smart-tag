@@ -23,6 +23,9 @@ DEFAULT_AFTERNOON_START = "14:30:00"
 DEFAULT_AFTERNOON_END = "17:00:00"
 DEFAULT_WEEKDAYS_ONLY = True
 DEFAULT_APPROACH_DISTANCE = 1500  # meters
+CONF_DELAYED_START_DAYS = "delayed_start_days"
+DEFAULT_DELAYED_START_DAYS: list[str] = []
+WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]  # index = weekday()
 
 STATUS_ON_BUS = "on_bus"
 STATUS_DROPPED_OFF = "dropped_off"

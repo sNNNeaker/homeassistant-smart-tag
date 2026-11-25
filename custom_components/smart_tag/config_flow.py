@@ -29,6 +29,7 @@ from .const import (
     CONF_AFTERNOON_END,
     CONF_AFTERNOON_START,
     CONF_APPROACH_DISTANCE,
+    CONF_DELAYED_START_DAYS,
     CONF_MORNING_END,
     CONF_MORNING_START,
     CONF_REFRESH_TOKEN,
@@ -36,11 +37,13 @@ from .const import (
     DEFAULT_AFTERNOON_END,
     DEFAULT_AFTERNOON_START,
     DEFAULT_APPROACH_DISTANCE,
+    DEFAULT_DELAYED_START_DAYS,
     DEFAULT_MORNING_END,
     DEFAULT_MORNING_START,
     DEFAULT_WEEKDAYS_ONLY,
     DOMAIN,
     LOGGER,
+    WEEKDAYS,
 )
 
 if TYPE_CHECKING:
@@ -229,6 +232,19 @@ class SmartTagOptionsFlow(OptionsFlow):
                         CONF_WEEKDAYS_ONLY,
                         default=options.get(CONF_WEEKDAYS_ONLY, DEFAULT_WEEKDAYS_ONLY),
                     ): selector.BooleanSelector(),
+                    vol.Required(
+                        CONF_DELAYED_START_DAYS,
+                        default=options.get(
+                            CONF_DELAYED_START_DAYS, DEFAULT_DELAYED_START_DAYS
+                        ),
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=WEEKDAYS,
+                            multiple=True,
+                            mode=selector.SelectSelectorMode.LIST,
+                            translation_key="weekday",
+                        )
+                    ),
                     vol.Required(
                         CONF_APPROACH_DISTANCE, default=approach_default
                     ): selector.NumberSelector(

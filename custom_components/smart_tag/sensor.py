@@ -14,16 +14,27 @@ from homeassistant.const import UnitOfLength
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_system import METRIC_SYSTEM
 
-from .const import STATUS_DROPPED_OFF, STATUS_NO_RIDE_TODAY, STATUS_ON_BUS
-from .data import ride_status
+from .const import (
+    CONF_DELAYED_START_DAYS,
+    CONF_WEEKDAYS_ONLY,
+    DEFAULT_DELAYED_START_DAYS,
+    DEFAULT_WEEKDAYS_ONLY,
+    STATUS_DROPPED_OFF,
+    STATUS_NO_RIDE_TODAY,
+    STATUS_ON_BUS,
+    WEEKDAYS,
+)
+from .data import next_pickup, ride_status
 from .entity import SmartTagEntity
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
     from .coordinator import SmartTagCoordinator
-    from .data import SmartTagEntry
+    from .data import SmartTagEntry, StudentRoute
 
 ENTITY_DESCRIPTION = SensorEntityDescription(
     key="bus_status",
@@ -42,6 +53,13 @@ DISTANCE_DESCRIPTION = SensorEntityDescription(
     state_class=SensorStateClass.MEASUREMENT,
 )
 
+NEXT_PICKUP_DESCRIPTION = SensorEntityDescription(
+    key="bus_next_pickup",
+    translation_key="bus_next_pickup",
+    device_class=SensorDeviceClass.TIMESTAMP,
+    icon="mdi:bus-clock",
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,  # noqa: ARG001
@@ -55,6 +73,7 @@ async def async_setup_entry(
             [
                 SmartTagBusStatusSensor(coordinator, student_id),
                 SmartTagBusDistanceSensor(coordinator, student_id),
+                SmartTagNextPickupSensor(coordinator, student_id),
             ]
         )
 
@@ -117,3 +136,59 @@ class SmartTagBusDistanceSensor(SmartTagEntity, SensorEntity):
         if data is None or data.live is None:
             return None
         return data.live.distance_to_home_stop()
+
+class SmartTagNextPickupSensor(SmartTagEntity, SensorEntity):
+    """Next scheduled morning pickup at the home stop."""
+
+    def __init__(self, coordinator: SmartTagCoordinator, student_id: int) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, student_id, NEXT_PICKUP_DESCRIPTION.key)
+        self.entity_description = NEXT_PICKUP_DESCRIPTION
+
+    def _delayed_days(self) -> set[int]:
+        """Return the configured delayed-start weekdays (Monday = 0)."""
+        options = self.coordinator.config_entry.options
+        return {
+            WEEKDAYS.index(day)
+            for day in options.get(CONF_DELAYED_START_DAYS, DEFAULT_DELAYED_START_DAYS)
+            if day in WEEKDAYS
+        }
+
+    def _pickup(self) -> tuple[datetime, StudentRoute] | None:
+        """Return the next pickup and its route, or None."""
+        data = self.student_data
+        if data is None:
+            return None
+        options = self.coordinator.config_entry.options
+        return next_pickup(
+            data.student.routes,
+            dt_util.now(),
+            self._delayed_days(),
+            weekdays_only=options.get(CONF_WEEKDAYS_ONLY, DEFAULT_WEEKDAYS_ONLY),
+        )
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return the time of the next pickup."""
+        pickup = self._pickup()
+        return pickup[0] if pickup else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return details of the route and the afternoon route."""
+        pickup = self._pickup()
+        data = self.student_data
+        if pickup is None or data is None:
+            return None
+        when, route = pickup
+        routes = data.student.routes
+        am_count = sum(1 for item in routes if item.group == "AM")
+        pm_routes = [item for item in routes if item.group == "PM"]
+        pm_route = min(pm_routes, key=lambda item: item.pickup, default=None)
+        return {
+            "route": route.name,
+            "delayed_start": when.weekday() in self._delayed_days() and am_count > 1,
+            "dropoff_at_school": route.dropoff.strftime("%H:%M"),
+            "pm_pickup": pm_route.pickup.strftime("%H:%M") if pm_route else None,
+            "pm_dropoff": pm_route.dropoff.strftime("%H:%M") if pm_route else None,
+        }

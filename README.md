@@ -22,6 +22,7 @@ Entity | Description
 -- | --
 On bus (`binary_sensor`) | Whether the student is currently on a bus.
 Bus status (`sensor`) | `on_bus`, `dropped_off` or `no_ride_today`. Attributes describe the latest ride: `bus`, `route`, `driver`, `shift`, `boarded_at`, `boarded_latitude`, `boarded_longitude`, `dropped_off_at`, `dropped_off_latitude`, `dropped_off_longitude`.
+Bus next pickup (`sensor`) | Next scheduled morning pickup at the home stop (timestamp), from the student's routes in the portal. On delayed-start days (option) the later morning route is used. School holidays are not known to the integration. Attributes: `route`, `delayed_start`, `dropoff_at_school`, `pm_pickup`, `pm_dropoff`.
 School bus (`device_tracker`) | Live GPS position of the bus the student is riding (unknown when no bus is active), with the student's photo as picture. The API only knows the bus once the student has scanned on, so there is no position before boarding. Attributes: `speed_mph`, `heading`, `direction`, `gps_time`, `bus`, `route`, `home_stop`.
 Bus distance to stop (`sensor`) | Distance from the bus to the student's assigned home stop (shown in km or miles per your unit system); unknown when no live data.
 Bus approaching (`binary_sensor`) | On when a student is on an afternoon (PM) ride and the bus is within the approach distance of the home stop. Morning rides start at the home stop, so they never trigger it.
@@ -36,6 +37,7 @@ Polling is adaptive: every minute inside a ride window or while a student is on 
 - Morning start / end (default 06:30 - 08:45)
 - Afternoon start / end (default 14:30 - 17:00)
 - Weekdays only (default on)
+- Delayed-start days (default none): weekdays on which the later morning route runs
 - Approach distance (default 1.5 km; shown in km or miles per your unit system)
 
 ## Installation
