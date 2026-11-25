@@ -287,6 +287,7 @@ def ride_status(rides: list[Ride], now: datetime) -> tuple[str, Ride | None]:
         return (STATUS_ON_BUS, ride)
     return (STATUS_DROPPED_OFF, ride)
 
+
 def next_pickup(
     routes: list[StudentRoute],
     now: datetime,

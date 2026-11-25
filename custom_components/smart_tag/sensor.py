@@ -137,6 +137,7 @@ class SmartTagBusDistanceSensor(SmartTagEntity, SensorEntity):
             return None
         return data.live.distance_to_home_stop()
 
+
 class SmartTagNextPickupSensor(SmartTagEntity, SensorEntity):
     """Next scheduled morning pickup at the home stop."""
 
